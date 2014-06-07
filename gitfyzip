@@ -1,0 +1,90 @@
+#!/bin/bash
+###########################################
+## usage: do_gencode <civicrm-path>
+function do_gencode() {
+  pushd "$1/xml" > /dev/null
+    if [ -f "GenCode.php" ]; then
+      echo "[[Generate files]]"
+      php GenCode.php
+    else
+      echo "[[Skip \"Generate files\"]]"
+    fi
+  popd > /dev/null
+}
+###########################################
+## config_repo <repo-name> <local-path> <default-branch> <git-scripts-path>
+##                  1            2              3               4
+function config_repo() {
+  wget "${UPSTREAM_GIT_BASE_URL}/${1}/archive/${3}.zip"
+  unzip "${3}.zip"
+  rm "${3}.zip"
+  mv "${1}-${3}" ${2}
+}
+###########################################
+#### Main: Parse arguments
+
+set -e
+
+CIVICRM_CMS=""
+CIVICRM_ROOT=""
+CIVICRM_L10N=""
+CIVICRM_GIT_HOOKS=""
+CIVICRM_BRANCH="master"
+FORK_GIT_BASE_URL=""
+UPSTREAM_GIT_BASE_URL="https://github.com/jimyhuang"
+
+while [ -n "$1" ]; do
+  if [ -z "$CIVICRM_CMS" ]; then
+    ## First arg
+    CIVICRM_CMS="$1"
+  elif [ -z "$CIVICRM_ROOT" ]; then
+    ## Third arg
+    CIVICRM_ROOT="$1"
+  else
+    echo "unrecognized argument: $1"
+    exit 2
+  fi
+  shift
+done
+
+if [ -z "$CIVICRM_ROOT" -o ! -d "$CIVICRM_ROOT" -o -z "$UPSTREAM_GIT_BASE_URL" -o -z "$CIVICRM_CMS" ]; then
+  echo "Convert a directory into a set of CiviCRM git clones"
+  echo "usage: $0 <Drupal|Drupal6|Joomla|WordPress|all> <existing-civicrm-root> [--fork <base-url>] [--upstream <base-url>] [--l10n] [--hooks]"
+  echo "  <cms-name>: one of: Drupal|Drupal6|Joomla|WordPress|all"
+  echo "  <git-base-url>: a base URL shared by the desiried git repos (e.g. git://github.com/civicrm)"
+  echo "  <existing-civicrm-root>: the main directory containing CiviCRM"
+  echo "  --upstream <base-url>: specify the base URL for upstream repositories"
+  echo "  --fork <base-url>: specify the base URL for your personal fork repositories"
+  echo "  --l10n: optionally fetch localization data"
+  echo "  --hooks: optionally install recommended git hooks; the hooks are mostly"
+  echo "           tested with git CLI under Linux and OSX; they haven't been"
+  echo "           tested with git GUIs or Windows"
+  echo ""
+  echo "Note: If pointing to a pre-existing directory, your local changes may be replaced by"
+  echo "the pristine code from git. If you've made changes, then make sure there's a backup!"
+  echo ""
+  echo "example: $0 Drupal /var/www/drupal7/sites/all/modules/civicrm"
+  echo "  (checkout core code plus Drupal 7.x integration code)"
+  echo ""
+  echo "example: $0 Drupal6 /var/www/drupal6/sites/all/modules/civicrm"
+  echo "  (checkout core code plus Drupal 6.x integration code)"
+  echo ""
+  exit 1
+fi
+
+###########################################
+#### Main: Update git repo metadata ####
+## config_repo <repo-name>         <local-path>                <default-branch>      <git-scripts-path>
+config_repo     civicrm-packages   "$CIVICRM_ROOT/packages"   "$CIVICRM_BRANCH"      "../../tools/scripts/git"
+case "$CIVICRM_CMS" in
+  Drupal)
+    config_repo civicrm-drupal     "$CIVICRM_ROOT/drupal"     "7.x-$CIVICRM_BRANCH"  "../../tools/scripts/git"
+    ;;
+  Drupal6)
+    config_repo civicrm-drupal     "$CIVICRM_ROOT/drupal"     "6.x-$CIVICRM_BRANCH"  "../../tools/scripts/git"
+    ;;
+  *)
+    echo "Unrecognized CMS: $CIVICRM_CMS"
+esac
+
+do_gencode "$CIVICRM_ROOT"
